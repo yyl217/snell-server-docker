@@ -1,14 +1,22 @@
-FROM jeanblanchard/alpine-glibc:latest
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:latest AS xx
 
-ENV SNELL_VERSION
-ENV TZ
+FROM --platform=$BUILDPLATFORM frolvlad/alpine-glibc:alpine-3.16 AS build
 
-WORKDIR /tmp
+COPY --from=xx / /
+COPY get_url.sh /get_url.sh
+ARG TARGETPLATFORM
+ARG VERSION
 
+RUN xx-info env && wget -q -O "snell-server.zip" $(/get_url.sh ${VERSION} $(xx-info arch)) && \
+    unzip snell-server.zip && rm snell-server.zip && \
+    xx-verify /snell-server
+
+FROM frolvlad/alpine-glibc:alpine-3.16
+
+ENV TZ=UTC
+
+COPY --from=build /snell-server /usr/bin/snell-server
 COPY start.sh /start.sh
-RUN apk add --update libstdc++ && rm -rf /var/cache/apk/* && \
-    wget https://dl.nssurge.com/snell/snell-server-v${SNELL_VERSION}-linux-amd64.zip && \
-    unzip snell-server-v${SNELL_VERSION}-linux-amd64.zip && \
-    mv snell-server /usr/bin/ && rm snell-server-v${SNELL_VERSION}-linux-amd64.zip
+RUN apk add --update --no-cache libstdc++
 
 ENTRYPOINT /start.sh
